@@ -1,0 +1,14 @@
+Room:0
+ down,1
+
+Room:1
+ east,2
+ north,3
+
+Room:2
+ west,1
+ up,3
+
+Room:3
+ down,2
+
