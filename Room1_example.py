@@ -1,7 +1,52 @@
 from object import Object
 from player import Player
 import sys  # For exiting the game
+import time
 
+
+# this is how you create a new object. You inherit from class Object and override the 'use' function. 
+class Lamp(Object):
+
+    def __init__(self, name, description, can_be_gotten, state, visible):
+        # Call the superclass constructor
+        super().__init__(name, description, can_be_gotten, state, visible)
+
+    def use(self):
+        # the lamp toggles when you 'use' it. 
+        if self.state == "off":
+            self.state = "on"
+            print(f"The lamp is now on.")
+        else:
+            self.state = "off"
+            print(f"The lamp is now is now off.")
+
+
+class Farmer(Object):
+    def __init__(self, name, description, can_be_gotten, state, visible, player : "Player", countdown, alarmed = True):
+        self.alarmed = alarmed 
+        self.countdown = countdown  
+        self.current_countdown = countdown 
+        self.countdown_has_started = False
+        self.player_handle = player
+        super().__init__(name, description, can_be_gotten, state, visible)
+    def start_countdown(self):
+        if self.countdown_has_started:
+            return
+        self.countdown_has_started = True
+        while self.countdown_has_started:
+            for i in range(self.current_countdown, 0, -1):
+                print(i)
+                time.sleep(1)
+            
+            print("BANG!")
+            self.player_handle.health = 0
+            self.countdown_has_started = False
+    def use(self):
+        if self.alarmed:
+            print("""Now don't come any closer ya hear?\nI'm gonna give ya to the count of 5 to explain yaself.""")
+            self.start_countdown()
+        else:
+            print("")
 
 
 class Room:
@@ -10,25 +55,51 @@ class Room:
 
     def __init__(self):
         self.room_num = 0
-        self.description = ("The room is pitch dark.\n")
-                
-        #this is how you declare your exits. It doesn't matter what room they attach to, I'll worry about that in the global level. 
-        self.exits = ["east","north"]
+        self.has_entered_previously = False
+        self.is_in_hole = False
+        self.time_to_react = 5
+        self.location = "desert"
+        self.farmer = None
+        self.description = (
+            """Suddenly, you're in a desert, blinded by the hot afternoon sun
+You come to your senses, and notice there's a man holding a strange contraption right in front of you.
+He speaks, 
+"Where in the hell didja come from!?"
+He seems very alarmed, and jerks the contraption to face you.
+"Nowh don't move a finga, you's gonna explain where ya came from."
+He moves his finger onto a section of the contraption.
+You instinctively flick your arms up.
+"Noh funny tricks from ya, or the vulchahs are gonna have themselfes a snack"
+
+You need to find a way out of this situation.
+
+There is a reality-breaking door behind you, which seems to link back to the dungeon you came from.
+            
+There also seems to be a loose patch of dirt in front of you, potentially covering a hole beneath."""
+        )
 
 
-    # this gets called when the player enters the room.
+        # other room setup - add the lamp and set up the exits.
+
+        #this is how you declare your exits. It doesn't matter what room the attach to, I'll worry about that in the global level. 
+        self.exits = ["up", "down", "east"]
+
+
+
     def enter(self, player):
 
-        # step 0 - any fancy setup - this room is dark unless you have a lamp and it is on.
-
-        if player.has_item("lamp"):
-            lamp = player.get_item("lamp")
-            if lamp.state == "on":
-                self.description = ("The room is square with a small table in the corner. There is a door to the east and narrow passage to the north.")
-
-
         # step 1 - Print the room description
+        self.farmer = Farmer("Farmer", "A scared farmer with a very intimidating device", False, "Cautious", True, player, self.time_to_react)
+        if self.has_entered_previously:
+            self.time_to_react = 3
+            self.description = (
+                """The man snaps back to face you, remembering his previous encounter\n"There you are snake, stand still an' git it between the eyes"\nYou have mere moments to react."""
+            )
+            self.describe_room()
+            self.farmer.state = "Alarmed"
+            self.farmer.start_countdown()
         self.describe_room()
+        self.objects.append(self.farmer)
 
         # step 2 - make your own command loop - watch carefully about how to parse commands:
         while True:
@@ -78,68 +149,77 @@ class Room:
             else:
                 self.unknown_command()
 
+            if not player.is_alive():
+                return self.exits[2]
+
     # Helper functions
     def describe_room(self):
         print(self.description)
+        if self.location == "desert":
+            self.description = (
+                """You're in a desert, with an alarmed farmer in front of you, a dimension door behind you, and loose dirt in front of you"""
+            ) #This may break stuff, but it's supposed to change the description after entering the room
+        else:
+            self.description = (
+                """You're in a dark dusty hole, with a portal above you and a deep hole below you"""
+            )
         if self.objects:
             for obj in self.objects:
                 print(f"There is a {obj.name} here.")
 
     def move(self, direction):
-        if direction in ["east", "e"]:
-            print("You head through the door to the east.")
-            return "east"
-        elif direction in ["north", "n","passage"]:
-            print("You head through the door to the east.")
+        if direction in ["down", "d"]: #add any oYou're in a darkther commands that might go down
+            if self.location == "desert":
+                print("You break through the dirt, and find yourself in a dark, dusty hole")
+                self.location = "hole"
+                if self.farmer:
+                    self.farmer.countdown_has_started = False
+                return None
+            print("You go deeper into the hole as it beckons you forward")
+            self.has_entered_previously = True
+            if self.farmer:
+                self.farmer.countdown_has_started = False
+            return "down"
+        elif direction in ["up", "u"] and self.location == "hole":
+            print("you go up into the strange portal and are transported elsewhere")
+            self.has_entered_previously = True
+            if self.farmer:
+                self.farmer.countdown_has_started = False
+            return "up"
+        elif direction in ["east", "e"]:
+            print("you go back to whence you came")
+            self.has_entered_previously = True
+            if self.farmer:
+                self.farmer.countdown_has_started = False
             return "east"
         else:
-
             print("You can't go that way.")
             return None
-
 
     def look(self, target, player):
         if(target == None or target == "" ):
             self.describe_room()
             return
 
-
-        # special handling for this room, if the player has the lamp and it is off...
-        if player.has_item("lamp"):
-            if player.get_item("lamp").state == "off":
-                print("The room is pitch dark - you can't see anything.")
-                return
-        else:
-            print("You don't have a lamp and the room is pitch dark.")
+        if target == "farmer" and self.farmer:
+            print("The farmer doesn't react very kindly to being inspected")
+            self.farmer.start_countdown()
             return
-
-
-        #special case the table
-        if target == "table":
-            print("There is a word scratched into the surface of the table. It says: 'excelcior' ")
-            return
-    
-        # Check if the object is in the room object list or in the player's inventory and print its description and status.
-        # the table could have been an object if we wanted it to be - then it would be like the lamp. In this case we chose
-        # not to make the table an object and it was handled special case above. 
-        # this code is pretty generic can could probably be used without much modification in your room.
+        
+        # Check if the object is in the room or in the player's inventory and print it description and status. You can use this code exactly.
         item = self.get_item_from_inventory(target,player)
         if item == None:
             item = self.get_item_from_object_list(target)
             if item == None:
                 print("There is nothing like " + target + " to look at.")
                 return
-            
+
         if target == item.name.lower().strip():
             print(item.description) 
             if(item.state != None): 
                 print(f"The {item.name} is {item.state}")                   
             return
-            
-            print("looking at", target, "reveals nothing.")
-            return
     
-
     # you can use this as well. haha get it? use this...
     def use(self, item_name, player):
         item = self.get_item_from_inventory(item_name,player)
@@ -152,16 +232,9 @@ class Room:
             return
         
         item.use()
+        
 
-        # custom lamp handling for the room.
-        if item.name.lower() == "lamp" :
-            if item.state == "off":
-                self.description = "The room is pitch dark.\n"
-            else:
-                self.description = "The room is square with a small table in the corner. There is a door to the east and narrow passage to the north."
-
-    
-
+    # this code could also probably be used verbatim
     def get(self, item_name, player):
 
         # Check if the player already has the item in their inventory
@@ -184,8 +257,6 @@ class Room:
         print(f"You take the {item.name} and add it to your inventory.")
         return
     
-
-
     def drop(self, item_name, player):
         item = self.get_item_from_inventory(item_name,player)
         if(item == None):
@@ -213,7 +284,7 @@ class Room:
         print("Available commands: move, go, look, get, take, drop, inventory, stats, quit, help")
 
     def show_hint(self):
-        print("The desk looks interesting.")
+        print("This is the starting room. You probably ought to get the lamp and go down the well.")
 
     def unknown_command(self):
         print("You can't do that here. Try something else or type 'help' for options or 'hint' for a clue.")
