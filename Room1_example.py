@@ -19,7 +19,7 @@ class Chest(Object):
         self.sealed = True
         self.riddling_begun = False
     def use(self):
-        print("The chest awaits your answers to its riddles, type \"begin\" to start")
+        print("The chest awaits your answers to its riddles, type \"begin\" to start and \"stop\" to stop\n once you stop however, the chest may be sealed forever")
 
 
 class Room:
@@ -248,7 +248,7 @@ class Room:
         print("Available commands: move, go, look, get, take, drop, inventory, stats, quit, help")
 
     def show_hint(self):
-        print("You might want to get away from the farmer.")
+        print("Answer the chest's riddles, but answer carefully for you have limited attempts")
 
     def unknown_command(self):
         print("You can't do that here. Try something else or type 'help' for options or 'hint' for a clue.")
@@ -265,18 +265,42 @@ class Room:
                 return item
         return None
     
+    def give_minor_reward(self, player):
+        if self.chest:
+            self.chest.riddling_begun = False
+        print("However, as you turn away in defeat, it shifts open and within there lies a strange potion")
+        player.inventory.append(self.reward)
+        player.score += 20
+        print("Congratulations, you received a healing potion")
+        self.has_riddled_previously = True
+
+    def give_major_reward(self, player):
+        hp_added = 50
+        if self.chest:
+            self.chest.riddling_begun = False
+        print("The chest opens to reveal a holy orb within it, as you grasp it you find yourself feeling stronger")
+        print(f"You gained {hp_added} health")
+        player.health += hp_added
+        player.score += 50
+
     def do_riddling(self, cmd, player):
+        if cmd == "stop":
+            if self.chest:
+                self.chest.riddling_begun = False
+            print("You shout into the room, and the note on the chest disappears")
+            if self.questions_answered == 3:
+                self.give_major_reward(player)
+            elif self.questions_answered == 2:
+                self.give_minor_reward(player)
+            else:
+                print("The chest locks tight, it seems your chance to get the valuables locked within is gone")
+            self.has_riddled_previously = True
+            return 
         if cmd in self.answers[self.questions_answered]:
             self.questions_answered += 1
             if self.questions_answered > len(self.answers) - 1 and self.chest:
-                hp_added = 50
-                self.chest.riddling_begun = False
-                print("The chest opens to reveal a holy orb within it, as you grasp it you find yourself feeling stronger")
-                print(f"You gained {hp_added} health")
-                player.health += hp_added
-                player.score += 50
+                self.give_major_reward(player)
                 self.has_riddled_previously = True
-                self.chest.riddling_begun = False
                 return
             print("The chest glows in response, it seems your answer was correct")
             print(self.questions[self.questions_answered])
@@ -285,13 +309,9 @@ class Room:
             if self.riddling_attempts <= 0:
                 print("The chest locks tight, it seems to be disappointed in you")
                 if self.questions_answered == 2:
-                    print("However, as you turn away in defeat, it shifts open and within there lies a strange potion")
-                    player.inventory.append(self.reward)
-                    player.score += 20
-                    print("Congratulations, you received a healing potion")
+                    self.give_minor_reward(player)
                 self.has_riddled_previously = True
-                if self.chest:
-                    self.chest.riddling_begun = False
+                return
             print("The chest does not react, perhaps answer more astutely next time")
             print(f"You have {self.riddling_attempts} attempts left")
 
